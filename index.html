@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Treasure Hunt — Mini Game</title>
+  <style>
+    :root{
+      --bg:#0f172a; --card:#0b1220; --accent:#ffd166; --muted:#9aa6bf; --tile:#10223a;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; min-height:100vh; font-family:Inter, system-ui, Arial, sans-serif;
+      background:linear-gradient(180deg,#061021 0%, #071223 60%); color:#e6eef8; display:flex;align-items:center;justify-content:center;padding:24px;
+    }
+    .app{
+      width:100%; max-width:980px; background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02)); border-radius:14px; padding:18px; box-shadow: 0 8px 30px rgba(2,6,23,0.7);
+      display:grid; grid-template-columns: 360px 1fr; gap:18px;
+    }
+    header{grid-column:1/-1; display:flex;align-items:center;justify-content:space-between}
+    h1{font-size:18px;margin:0}
+    .controls{display:flex;gap:8px;align-items:center}
+    button{background:var(--accent);border:none;padding:8px 12px;border-radius:8px;font-weight:600;cursor:pointer}
+    .panel{background:rgba(255,255,255,0.02); padding:12px;border-radius:10px}
+
+    /* left column - info */
+    .left{display:flex;flex-direction:column;gap:12px}
+    .stats{display:flex;gap:8px;flex-wrap:wrap}
+    .stat{flex:1;min-width:120px;padding:12px;border-radius:8px;background:linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0.005));}
+    .stat h3{margin:0;font-size:12px;color:var(--muted)}
+    .stat p{margin:6px 0 0;font-size:18px;font-weight:700}
+
+    /* board */
+    .board-wrap{display:flex;flex-direction:column;gap:12px}
+    .board{display:grid;grid-template-columns:repeat(8, 1fr);gap:6px;background:transparent;padding:6px}
+    .tile{aspect-ratio:1/1;background:var(--tile);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer;user-select:none;transition:transform .06s ease, background .12s ease}
+    .tile:active{transform:scale(.98)}
+    .tile.revealed{background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(0,0,0,0.03));cursor:default}
+    .tile.hint{box-shadow:0 0 0 3px rgba(255,209,102,0.07) inset}
+    .tile.treasure{background:linear-gradient(180deg, #ffd16644, #ffd16622); color:#111; font-weight:800}
+
+    /* footer */
+    .footer{grid-column:1/-1;display:flex;gap:8px;justify-content:space-between;align-items:center}
+    .settings{display:flex;gap:8px;align-items:center}
+
+    /* small screens */
+    @media (max-width:880px){
+      .app{grid-template-columns:1fr;}
+      .board{grid-template-columns:repeat(6,1fr)}
+    }
+    @media (max-width:520px){
+      .board{grid-template-columns:repeat(4,1fr)}
+      .app{padding:12px}
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>🏴‍☠️ Treasure Hunt</h1>
+      <div class="controls">
+        <label style="font-size:13px;color:var(--muted);">Grid</label>
+        <select id="gridSize">
+          <option value="6">6 × 6</option>
+          <option value="7">7 × 7</option>
+          <option value="8" selected>8 × 8</option>
+        </select>
+        <button id="restartBtn">Restart</button>
+      </div>
+    </header>
+
+    <div class="left panel">
+      <div class="stats">
+        <div class="stat">
+          <h3>Moves</h3>
+          <p id="moves">0</p>
+        </div>
+        <div class="stat">
+          <h3>Hints Left</h3>
+          <p id="hints">3</p>
+        </div>
+        <div class="stat">
+          <h3>Time</h3>
+          <p id="timer">00:00</p>
+        </div>
+      </div>
+
+      <div style="margin-top:6px;">
+        <button id="hintBtn">Use Hint</button>
+        <button id="cheatBtn" style="background:#6ee7b7;color:#04291b">Reveal Treasure</button>
+      </div>
+
+      <div style="margin-top:12px;font-size:14px;color:var(--muted)">
+        <strong>How to play:</strong>
+        <p>Click tiles to dig. Find the hidden treasure. Use hints to reveal nearby tiles. Try to use fewer moves!</p>
+      </div>
+
+      <div style="margin-top:12px;font-size:13px;color:var(--muted)">
+        <strong>Scoring tips:</strong>
+        <ul>
+          <li>Smaller grids are faster but harder.</li>
+          <li>Hints reduce score — use sparingly.</li>
+        </ul>
+      </div>
+
+    </div>
+
+    <main class="panel board-wrap">
+      <div id="board" class="board" aria-label="Treasure board"></div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button id="autoSolve">Auto-solve (demo)</button>
+        <div style="color:var(--muted);font-size:13px">Tip: Press Restart to reshuffle</div>
+      </div>
+    </main>
+
+    <div class="footer">
+      <div style="color:var(--muted);font-size:13px">Made with ❤️ • Single file HTML/CSS/JS</div>
+      <div class="settings">
+        <label style="font-size:13px;color:var(--muted)">Hints cost</label>
+        <select id="hintCost">
+          <option value="1">1 move</option>
+          <option value="2">2 moves</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Treasure Hunt — single file game
+    const boardEl = document.getElementById('board');
+    const movesEl = document.getElementById('moves');
+    const hintsEl = document.getElementById('hints');
+    const timerEl = document.getElementById('timer');
+    const restartBtn = document.getElementById('restartBtn');
+    const hintBtn = document.getElementById('hintBtn');
+    const cheatBtn = document.getElementById('cheatBtn');
+    const autoSolveBtn = document.getElementById('autoSolve');
+    const gridSizeSelect = document.getElementById('gridSize');
+    const hintCostSelect = document.getElementById('hintCost');
+
+    let gridSize = parseInt(gridSizeSelect.value,10);
+    let treasurePos = null; // index
+    let moves = 0;
+    let hintsLeft = 3;
+    let timer = 0;
+    let timerInterval = null;
+    let cells = [];
+
+    function startTimer(){
+      clearInterval(timerInterval);
+      timer = 0; timerEl.textContent = formatTime(timer);
+      timerInterval = setInterval(()=>{ timer++; timerEl.textContent = formatTime(timer); }, 1000);
+    }
+    function stopTimer(){ clearInterval(timerInterval); }
+    function formatTime(s){ const mm = String(Math.floor(s/60)).padStart(2,'0'); const ss = String(s%60).padStart(2,'0'); return `${mm}:${ss}`; }
+
+    function buildBoard(){
+      boardEl.innerHTML = '';
+      gridSize = parseInt(gridSizeSelect.value,10);
+      boardEl.style.gridTemplateColumns = `repeat(${gridSize}, 1fr)`;
+      cells = [];
+      const total = gridSize * gridSize;
+      for(let i=0;i<total;i++){
+        const el = document.createElement('div');
+        el.className = 'tile';
+        el.dataset.index = i;
+        el.addEventListener('click', onTileClick);
+        boardEl.appendChild(el);
+        cells.push(el);
+      }
+      placeTreasure();
+      moves = 0; hintsLeft = 3; movesEl.textContent = moves; hintsEl.textContent = hintsLeft; startTimer();
+    }
+
+    function placeTreasure(){
+      const total = gridSize*gridSize;
+      treasurePos = Math.floor(Math.random()*total);
+      // ensure clean tiles
+      cells.forEach(c => { c.classList.remove('revealed','treasure','hint'); c.textContent = ''; });
+      // for accessibility you could store row/col
+    }
+
+    function onTileClick(e){
+      const idx = Number(e.currentTarget.dataset.index);
+      // if already revealed, ignore
+      if(e.currentTarget.classList.contains('revealed')) return;
+
+      revealTile(idx);
+      moves++; movesEl.textContent = moves;
+
+      if(idx === treasurePos){
+        e.currentTarget.classList.add('treasure');
+        e.currentTarget.textContent = '💰';
+        stopTimer();
+        setTimeout(()=> alert(`You found the treasure in ${moves} moves and ${formatTime(timer)}!`), 80);
+      } else {
+        // give distance clue (manhattan)
+        const dist = manhattan(idx, treasurePos);
+        e.currentTarget.textContent = dist;
+        e.currentTarget.classList.add('revealed');
+        // if close, add hint glow
+        if(dist <= 2) e.currentTarget.classList.add('hint');
+      }
+    }
+
+    function manhattan(a,b){
+      const ax = a % gridSize; const ay = Math.floor(a / gridSize);
+      const bx = b % gridSize; const by = Math.floor(b / gridSize);
+      return Math.abs(ax-bx) + Math.abs(ay-by);
+    }
+
+    function revealTile(idx){
+      const el = cells[idx];
+      if(!el) return;
+      el.classList.add('revealed');
+    }
+
+    restartBtn.addEventListener('click', ()=>{
+      buildBoard();
+    });
+
+    hintBtn.addEventListener('click', ()=>{
+      const cost = Number(hintCostSelect.value);
+      if(hintsLeft <= 0){ alert('No hints left'); return; }
+      // cost in moves
+      moves += cost; movesEl.textContent = moves;
+      hintsLeft--; hintsEl.textContent = hintsLeft;
+      // reveal a nearby tile (not treasure)
+      const near = findNearbyHidden();
+      if(near !== null){
+        const el = cells[near];
+        el.classList.add('revealed','hint');
+        el.textContent = manhattan(near, treasurePos);
+      }
+    });
+
+    cheatBtn.addEventListener('click', ()=>{
+      // reveal treasure location (demo)
+      const el = cells[treasurePos];
+      el.classList.add('revealed','treasure');
+      el.textContent = '💰';
+      stopTimer();
+      alert('Cheat: Treasure revealed!');
+    });
+
+    autoSolveBtn.addEventListener('click', ()=>{
+      // simple demo: reveal tiles around treasure gradually
+      const order = pathToTreasure();
+      let i=0;
+      const iv = setInterval(()=>{
+        if(i>=order.length){ clearInterval(iv); return; }
+        const idx = order[i++];
+        const el = cells[idx];
+        el.classList.add('revealed');
+        el.textContent = (idx===treasurePos)?'💰':manhattan(idx,treasurePos);
+      }, 120);
+    });
+
+    gridSizeSelect.addEventListener('change', ()=> buildBoard());
+
+    function findNearbyHidden(){
+      // look for a tile within manhattan distance 2 that isn't revealed and isn't the treasure
+      const candidates = [];
+      for(let i=0;i<cells.length;i++){
+        if(i===treasurePos) continue;
+        if(cells[i].classList.contains('revealed')) continue;
+        const d = manhattan(i, treasurePos);
+        if(d <= 3) candidates.push(i);
+      }
+      if(candidates.length===0){
+        // fallback: pick any hidden
+        for(let i=0;i<cells.length;i++) if(!cells[i].classList.contains('revealed') && i!==treasurePos) candidates.push(i);
+      }
+      if(candidates.length===0) return null;
+      return candidates[Math.floor(Math.random()*candidates.length)];
+    }
+
+    function pathToTreasure(){
+      // just produce a simple path from top-left to treasure
+      const res=[];
+      const tx = treasurePos % gridSize; const ty = Math.floor(treasurePos / gridSize);
+      let x=0,y=0;
+      while(x!==tx || y!==ty){
+        const idx = y*gridSize + x; if(!res.includes(idx)) res.push(idx);
+        if(x < tx) x++; else if(y < ty) y++; else break;
+      }
+      res.push(treasurePos);
+      return res;
+    }
+
+    // init
+    buildBoard();
+  </script>
+</body>
+</html>
