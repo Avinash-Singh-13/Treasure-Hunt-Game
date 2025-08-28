@@ -43,10 +43,6 @@ Treasure-Hunt-Game/
 │── script.js        # Game logic
 └── README.md        # Project documentation
 ```
-## 📸 Screenshot
-```
+## Screenshot
 
-(Add a screenshot of your game here — you can upload an image in your repo and link it like below)
-
-![Treasure Hunt Screenshot](screenshot.png)
-```
+![Game Screenshot](screenshot.png)
