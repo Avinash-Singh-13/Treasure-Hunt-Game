@@ -39,8 +39,7 @@ cd Treasure-Hunt-Game
 📂 Project Structure
 Treasure-Hunt-Game/
 │── index.html       # Main game file
-│── style.css        # Game styling
-│── script.js        # Game logic
+│──screenshot        # Demo image
 └── README.md        # Project documentation
 ```
 ## Screenshot
